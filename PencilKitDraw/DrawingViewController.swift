@@ -32,9 +32,9 @@ Abstract:
 import UIKit
 import PencilKit
 
-class DrawingViewController: UIViewController, PKCanvasViewDelegate, PKToolPickerObserver, UIScreenshotServiceDelegate {
+class DrawingViewController: UIViewController, PKToolPickerObserver, UIScreenshotServiceDelegate {
     
-    @IBOutlet weak var canvasView: PKCanvasView!
+    @IBOutlet weak var canvasView: CanvasView!
     @IBOutlet var undoBarButtonitem: UIBarButtonItem!
     @IBOutlet var redoBarButtonItem: UIBarButtonItem!
     
@@ -59,236 +59,509 @@ class DrawingViewController: UIViewController, PKCanvasViewDelegate, PKToolPicke
     /// Set up the drawing initially.
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
-        
-        // Set up the canvas view with the first drawing from the data model.
+        //setupUI()
         canvasView.delegate = self
-        canvasView.drawing = dataModelController.drawings[drawingIndex]
-        canvasView.alwaysBounceVertical = true
-        
-        // Set up the tool picker
-        if #available(iOS 14.0, *) {
-            toolPicker = PKToolPicker()
-        } else {
-            // Set up the tool picker, using the window of our parent because our view has not
-            // been added to a window yet.
-            let window = parent?.view.window
-            toolPicker = PKToolPicker.shared(for: window!)
-        }
-        
-        toolPicker.setVisible(true, forFirstResponder: canvasView)
-        toolPicker.addObserver(canvasView)
-        toolPicker.addObserver(self)
-        updateLayout(for: toolPicker)
+        canvasView.drawingPolicy = .pencilOnly
+        canvasView.tool = PKInkingTool(.pen, color: .red, width: 10)
         canvasView.becomeFirstResponder()
-        
-        // Add a button to sign the drawing in the bottom right hand corner of the page
-        signDrawingItem = UIBarButtonItem(title: "Sign Drawing", style: .plain, target: self, action: #selector(signDrawing(sender:)))
-        navigationItem.rightBarButtonItems?.append(signDrawingItem)
-        
-        // Before iOS 14, add a button to toggle finger drawing.
-        if #available(iOS 14.0, *) { } else {
-            pencilFingerBarButtonItem = UIBarButtonItem(title: "Enable Finger Drawing",
-                                                        style: .plain,
-                                                        target: self,
-                                                        action: #selector(toggleFingerPencilDrawing(_:)))
-            navigationItem.rightBarButtonItems?.append(pencilFingerBarButtonItem)
-            canvasView.allowsFingerDrawing = false
-        }
-        
-        // Always show a back button.
-        navigationItem.leftItemsSupplementBackButton = true
-        
-        // Set this view controller as the delegate for creating full screenshots.
-        parent?.view.window?.windowScene?.screenshotService?.delegate = self
-    }
-    
-    /// When the view is resized, adjust the canvas scale so that it is zoomed to the default `canvasWidth`.
-    override func viewDidLayoutSubviews() {
-        super.viewDidLayoutSubviews()
-        
-        let canvasScale = canvasView.bounds.width / DataModel.canvasWidth
-        canvasView.minimumZoomScale = canvasScale
-        canvasView.maximumZoomScale = canvasScale
-        canvasView.zoomScale = canvasScale
-        
-        // Scroll to the top.
-        updateContentSizeForDrawing()
-        canvasView.contentOffset = CGPoint(x: 0, y: -canvasView.adjustedContentInset.top)
-    }
-    
-    /// When the view is removed, save the modified drawing, if any.
-    override func viewWillDisappear(_ animated: Bool) {
-        super.viewWillDisappear(animated)
-        
-        // Update the drawing in the data model, if it has changed.
-        if hasModifiedDrawing {
-            dataModelController.updateDrawing(canvasView.drawing, at: drawingIndex)
-        }
-        
-        // Remove this view controller as the screenshot delegate.
-        view.window?.windowScene?.screenshotService?.delegate = nil
-    }
-    
-    /// Hide the home indicator, as it will affect latency.
-    override var prefersHomeIndicatorAutoHidden: Bool {
-        return true
-    }
-    
-    // MARK: Actions
-    
-    /// Action method: Turn finger drawing on or off, but only on devices before iOS 14.0
-    @IBAction func toggleFingerPencilDrawing(_ sender: Any) {
-        if #available(iOS 14.0, *) { } else {
-            canvasView.allowsFingerDrawing.toggle()
-            let title = canvasView.allowsFingerDrawing ? "Disable Finger Drawing" : "Enable Finger Drawing"
-            pencilFingerBarButtonItem.title = title
-        }
-    }
-    
-    /// Helper method to set a new drawing, with an undo action to go back to the old one.
-    func setNewDrawingUndoable(_ newDrawing: PKDrawing) {
-        let oldDrawing = canvasView.drawing
-        undoManager?.registerUndo(withTarget: self) {
-            $0.setNewDrawingUndoable(oldDrawing)
-        }
-        canvasView.drawing = newDrawing
-    }
-    
-    /// Action method: Add a signature to the current drawing.
-    @IBAction func signDrawing(sender: UIBarButtonItem) {
-        
-        // Get the signature drawing at the canvas scale.
-        var signature = dataModelController.signature
-        let signatureBounds = signature.bounds
-        let loc = CGPoint(x: canvasView.bounds.maxX, y: canvasView.bounds.maxY)
-        let scaledLoc = CGPoint(x: loc.x / canvasView.zoomScale, y: loc.y / canvasView.zoomScale)
-        signature.transform(using: CGAffineTransform(translationX: scaledLoc.x - signatureBounds.maxX, y: scaledLoc.y - signatureBounds.maxY))
 
-        // Add the signature drawing to the current canvas drawing.
-        setNewDrawingUndoable(canvasView.drawing.appending(signature))
+
+        let circle = UIBezierPath(ovalIn: CGRect(x: 100, y: 100, width: 20, height: 20))
+        let points = circle.cgPath.points()
+        let newStroke = createCGPointToPKStroke(points: points)
+        print(points)
+        canvasView.drawing.strokes.append(newStroke)
+        //let stroke = canvasView.drawing.strokes[0]
+        //drawLine(point1: CGPoint(x: 0, y: 0), point2: CGPoint(x: 1000, y: 1000), color: .red, size: CGSize(width: 10, height: 10))
+
     }
-    
-    // MARK: Navigation
-    
-    /// Set up the signature view controller.
-    override func prepare(for segue: UIStoryboardSegue, sender: Any?) {
-        (segue.destination as? SignatureViewController)?.dataModelController = dataModelController
+
+    func drawLine(point1: CGPoint, point2: CGPoint, color: UIColor, size: CGSize) {
+        //Define soints on strokePath
+        let strokePoint1 = PKStrokePoint(location: point1, timeOffset: TimeInterval.init(), size: size, opacity: 2, force: 2, azimuth: 2, altitude: 1)
+        let strokePoint2 = PKStrokePoint(location: point2, timeOffset: TimeInterval.init(), size: size, opacity: 2, force: 2, azimuth: 2, altitude: 1)
+        //Define strokePath
+        let strokePath = PKStrokePath(controlPoints: [strokePoint1, strokePoint2], creationDate: Date())
+        //Define stroke
+        let stroke = PKStroke(ink: PKInk(.pen, color: .red), path: strokePath)
+        //Append stroke to strokes array in drawing
+        canvasView.drawing.strokes.append(stroke)
     }
+
+    var isUpdatingDrawing = false
+}
+
+extension DrawingViewController: PKCanvasViewDelegate {
+
     
-    // MARK: Canvas View Delegate
-    
-    /// Delegate method: Note that the drawing has changed.
     func canvasViewDrawingDidChange(_ canvasView: PKCanvasView) {
-        hasModifiedDrawing = true
-        updateContentSizeForDrawing()
-    }
-    
-    /// Helper method to set a suitable content size for the canvas view.
-    func updateContentSizeForDrawing() {
-        // Update the content size to match the drawing.
-        let drawing = canvasView.drawing
-        let contentHeight: CGFloat
-        
-        // Adjust the content size to always be bigger than the drawing height.
-        if !drawing.bounds.isNull {
-            contentHeight = max(canvasView.bounds.height, (drawing.bounds.maxY + DrawingViewController.canvasOverscrollHeight) * canvasView.zoomScale)
-        } else {
-            contentHeight = canvasView.bounds.height
-        }
-        canvasView.contentSize = CGSize(width: DataModel.canvasWidth * canvasView.zoomScale, height: contentHeight)
-    }
-    
-    // MARK: Tool Picker Observer
-    
-    /// Delegate method: Note that the tool picker has changed which part of the canvas view
-    /// it obscures, if any.
-    func toolPickerFramesObscuredDidChange(_ toolPicker: PKToolPicker) {
-        updateLayout(for: toolPicker)
-    }
-    
-    /// Delegate method: Note that the tool picker has become visible or hidden.
-    func toolPickerVisibilityDidChange(_ toolPicker: PKToolPicker) {
-        updateLayout(for: toolPicker)
-    }
-    
-    /// Helper method to adjust the canvas view size when the tool picker changes which part
-    /// of the canvas view it obscures, if any.
-    ///
-    /// Note that the tool picker floats over the canvas in regular size classes, but docks to
-    /// the canvas in compact size classes, occupying a part of the screen that the canvas
-    /// could otherwise use.
-    func updateLayout(for toolPicker: PKToolPicker) {
-        let obscuredFrame = toolPicker.frameObscured(in: view)
-        
-        // If the tool picker is floating over the canvas, it also contains
-        // undo and redo buttons.
-        if obscuredFrame.isNull {
-            canvasView.contentInset = .zero
-            navigationItem.leftBarButtonItems = []
-        }
-        
-        // Otherwise, the bottom of the canvas should be inset to the top of the
-        // tool picker, and the tool picker no longer displays its own undo and
-        // redo buttons.
-        else {
-            canvasView.contentInset = UIEdgeInsets(top: 0, left: 0, bottom: view.bounds.maxY - obscuredFrame.minY, right: 0)
-            navigationItem.leftBarButtonItems = [undoBarButtonitem, redoBarButtonItem]
-        }
-        canvasView.scrollIndicatorInsets = canvasView.contentInset
-    }
-    
-    // MARK: Screenshot Service Delegate
-    
-    /// Delegate method: Generate a screenshot as a PDF.
-    func screenshotService(
-        _ screenshotService: UIScreenshotService,
-        generatePDFRepresentationWithCompletion completion:
-        @escaping (_ PDFData: Data?, _ indexOfCurrentPage: Int, _ rectInCurrentPage: CGRect) -> Void) {
-        
-        // Find out which part of the drawing is actually visible.
-        let drawing = canvasView.drawing
-        let visibleRect = canvasView.bounds
-        
-        // Convert to PDF coordinates, with (0, 0) at the bottom left hand corner,
-        // making the height a bit bigger than the current drawing.
-        let pdfWidth = DataModel.canvasWidth
-        let pdfHeight = drawing.bounds.maxY + 100
-        let canvasContentSize = canvasView.contentSize.height - DrawingViewController.canvasOverscrollHeight
-        
-        let xOffsetInPDF = pdfWidth - (pdfWidth * visibleRect.minX / canvasView.contentSize.width)
-        let yOffsetInPDF = pdfHeight - (pdfHeight * visibleRect.maxY / canvasContentSize)
-        let rectWidthInPDF = pdfWidth * visibleRect.width / canvasView.contentSize.width
-        let rectHeightInPDF = pdfHeight * visibleRect.height / canvasContentSize
-        
-        let visibleRectInPDF = CGRect(
-            x: xOffsetInPDF,
-            y: yOffsetInPDF,
-            width: rectWidthInPDF,
-            height: rectHeightInPDF)
-        
-        // Generate the PDF on a background thread.
-        DispatchQueue.global(qos: .background).async {
-            
-            // Generate a PDF.
-            let bounds = CGRect(x: 0, y: 0, width: pdfWidth, height: pdfHeight)
-            let mutableData = NSMutableData()
-            UIGraphicsBeginPDFContextToData(mutableData, bounds, nil)
-            UIGraphicsBeginPDFPage()
-            
-            // Generate images in the PDF, strip by strip.
-            var yOrigin: CGFloat = 0
-            let imageHeight: CGFloat = 1024
-            while yOrigin < bounds.maxY {
-                let imgBounds = CGRect(x: 0, y: yOrigin, width: DataModel.canvasWidth, height: min(imageHeight, bounds.maxY - yOrigin))
-                let img = drawing.image(from: imgBounds, scale: 2)
-                img.draw(in: imgBounds)
-                yOrigin += imageHeight
+        print("canvasViewDrawingDidChange")
+        guard !isUpdatingDrawing else { return }
+
+        let strokes: [PKStroke] = canvasView.drawing.strokes
+        guard let path = strokes.last?.path else { return }
+
+        guard let firstPoint = path.first, let lastPoint = path.last else { return }
+
+        isUpdatingDrawing = true
+
+        if firstPoint.approximatelyIntersects(lastPoint) {
+            var pathLocations: [CGPoint] = []
+            var slopes: [CGFloat] = []
+            for point in path.interpolatedPoints(by: .distance(50)) {
+                pathLocations.append(point.location)
             }
-            
-            UIGraphicsEndPDFContext()
-            
-            // Invoke the completion handler with the generated PDF data.
-            completion(mutableData as Data, 0, visibleRectInPDF)
+//            print(pathLocations)
+//            for index in 1..<pathLocations.count {
+//                let distanceX = pathLocations[index].x - pathLocations[index - 1].x
+//                let distanceY = pathLocations[index].y - pathLocations[index - 1].y
+//                let slope = CGFloat(distanceX/distanceY)
+//                slopes.append(slope)
+//            }
+            //print(slopes)
+            //let newStroke = createPloygon(points: pathLocations)
+            canvasView.drawing.strokes.removeLast()
+        } else {
+            let newStroke = createLinearLine(firstPoint: firstPoint, lastPoint: lastPoint)
+            canvasView.drawing.strokes[strokes.count - 1] = newStroke
         }
+
+        isUpdatingDrawing = false
+    }
+
+    func createPloygon(points: [CGPoint]) -> [PKStroke] {
+        let ink = PKInk(.pen, color: .red)
+        var strokes: [PKStroke] = []
+
+
+        let strokePoints = points.enumerated().map { index, point in
+            PKStrokePoint(location: point, timeOffset: 0.1 * TimeInterval(index), size: CGSize(width: 5, height: 5), opacity: 2, force: 1, azimuth: 0, altitude: 0)
+        }
+
+        var startStrokePoint = strokePoints.first!
+
+        for strokePoint in strokePoints {
+            let path = PKStrokePath(controlPoints: [startStrokePoint, strokePoint], creationDate: Date())
+            strokes.append(PKStroke(ink: ink, path: path))
+            startStrokePoint = strokePoint
+        }
+
+        return strokes
+    }
+
+    func createLinearLine(firstPoint: PKStrokePoint, lastPoint: PKStrokePoint) -> PKStroke {
+
+        var newPoints: [PKStrokePoint] = []
+
+        [firstPoint, lastPoint].forEach { point in
+            let newPoint = PKStrokePoint(location: point.location,
+                                         timeOffset: point.timeOffset,
+                                         size: CGSize(width: 5,height: 5),
+                                         opacity: CGFloat(1), force: point.force,
+                                         azimuth: point.azimuth, altitude: point.altitude)
+            newPoints.append(newPoint)
+        }
+        let newPath = PKStrokePath(controlPoints: newPoints, creationDate: Date())
+        let circle = UIBezierPath(ovalIn: CGRect(x: 100, y: 100, width: 20, height: 20))
+        let newStroke = PKStroke(ink: PKInk(.pen, color: .red), path: newPath, mask: circle)
+
+        return newStroke
+    }
+
+    func createCGPointToPKStroke(points: [CGPoint]) -> PKStroke {
+        let ink = PKInk(.pen, color: .red)
+
+        let strokePoints = points.enumerated().map { index, point in
+            PKStrokePoint(location: point,
+                          timeOffset: TimeInterval.init(),
+                          size: CGSize(width: 5, height: 5),
+                          opacity: 2, force: 1,
+                          azimuth: 0, altitude: 0)
+        }
+
+        let newPath = PKStrokePath(controlPoints: strokePoints, creationDate: Date())
+        let newStroke = PKStroke(ink: ink, path: newPath)
+        return newStroke
+    }
+
+    func canvasViewDidFinishRendering(_ canvasView: PKCanvasView) {
+        print("canvasViewDidFinishRendering")
+    }
+
+    func canvasViewDidEndUsingTool(_ canvasView: PKCanvasView) {
+        print("canvasViewDidEndUsingTool")
+        //        var pathLocations: [CGPoint] = []
+        //        var slopes: [CGFloat] = []
+        //        for path in lastStrokePath.interpolatedPoints(by: .distance(1)) {
+        //            pathLocations.append(path.location)
+        //        }
+        //
+        //        for index in 1..<pathLocations.count {
+        //            let distanceX = pathLocations[index].x - pathLocations[index - 1].x
+        //            let distanceY = pathLocations[index].y - pathLocations[index - 1].y
+        //            let slope = CGFloat(distanceX/distanceY)
+        //            slopes.append(slope)
+        //        }
+        //        print(slopes)
+    }
+
+    func canvasViewDidBeginUsingTool(_ canvasView: PKCanvasView) {
+        print("canvasViewDidBeginUsingTool")
+        //drawLine(point1: CGPoint(x: 0, y: 0), point2: CGPoint(x: 1000, y: 1000), color: .red, size: CGSize(width: 10, height: 10))
+    }
+}
+
+extension DrawingViewController: CALayerDelegate {
+
+    func action(for layer: CALayer, forKey event: String) -> CAAction? {
+        if event == "position" {
+            return NSNull()
+        }
+        return nil
+    }
+}
+
+
+class CanvasView: PKCanvasView {
+
+    typealias SidePoints = (top: CGPoint, bottom: CGPoint, `left`: CGPoint, `right`: CGPoint)
+    private var pointList: [CGPoint] = []
+    private var isSnapToShape: Bool = false
+    private var minimumTouchSize = 50
+    private var minimumDistance: CGFloat = 2
+
+
+    private var pauseTouchCount: Int = 0
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+    }
+
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+    }
+
+
+
+    override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
+        super.touchesMoved(touches, with: event)
+
+        if isSnapToShape { return }
+
+        guard let touch = touches.first else {return }
+        if touch.type != .pencil { return }
+
+
+        let count = pointList.count
+
+        if count == 0 {
+            pointList.append(touch.location(in: self))
+            return
+        }
+
+        let lastPoint = pointList[count - 1]
+        let currentPoint = touch.location(in: self)
+
+        let distance = lastPoint.distance(point: currentPoint)
+        //print(distance)
+
+        if distance < minimumDistance {
+            pauseTouchCount += 1
+
+            if pauseTouchCount > 50 {
+//                guard let sidePoints = sideLimitPoints(points: pointList) else { return }
+//                print(sidePoints)
+//                let layer = createPloyonLayer(sidePoints: sidePoints)
+//                self.layer.addSublayer(layer)
+                //print(intersectTouches.count)
+
+                guard let vertexs = getVertexsPointList(points: pointList) else { return }
+
+                let layer = createPlogonLayer(vertexs: vertexs)
+                self.layer.addSublayer(layer)
+                isSnapToShape = true
+                pointList.removeAll()
+            }
+            return
+        }
+
+        pointList.append(currentPoint)
+        pauseTouchCount = 0
+
+
+        //print(touch.location(in: self))
+
+//        if count < minimumTouchSize { return }
+//
+//        let lastLocation = pointList[count - 1]
+//        let initialLocation = pointList[count - minimumTouchSize]
+//
+//        let distance = lastLocation.distance(point: initialLocation)
+//
+//        //print(lastLocation, initialLocation, distance)
+//        let currentPoint = touch.location(in: self)
+//
+//        if distance < minimumDistance {
+//            guard let sidePoints = sideLimitPoints(points: pointList) else { return }
+//            print(sidePoints)
+//            let layer = createPloyonLayer(sidePoints: sidePoints)
+//            self.layer.addSublayer(layer)
+//            //print(intersectTouches.count)
+//            isSnapToShape = true
+//            pointList.removeAll()
+//        }
+
+
+//        // Append First UITouch Info
+//        if touchList.count == 0 {
+//            touchList.append(touch)
+//            return
+//        }
+//
+//        // Check Approximately Intersect. If so, append.
+//        let currentPoint = touch.location(in: self)
+//
+//        //print(touch.previousLocation(in: self))
+//        touchList.forEach {
+//            if !$0.location(in: self).approximatelyIntersects(currentPoint) {
+//                touchList.removeAll()
+//                return
+//            }
+//        }
+//        touchList.append(touch)
+//
+//        // Check Long Press and Draw Shape
+//        if touchList.count > 300 {
+//            let layer = createTriangleLayer(point: currentPoint)
+//            self.layer.addSublayer(layer)
+//            //print(intersectTouches.count)
+//            isSnapToShape = true
+//            touchList.removeAll()
+//        }
+
+    }
+
+    override func touchesEstimatedPropertiesUpdated(_ touches: Set<UITouch>) {
+        super.touchesEstimatedPropertiesUpdated(touches)
+        //print("touchesEstimatedPropertiesUpdated")
+    }
+    override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
+        super.touchesEnded(touches, with: event)
+        pointList.removeAll()
+        isSnapToShape = false
+        pauseTouchCount = 0
+//
+//        var pathLocations: [CGPoint] = []
+//        var slopes: [CGFloat] = []
+//        for path in lastStrokePath.interpolatedPoints(by: .distance(1)) {
+//            pathLocations.append(path.location)
+//        }
+//
+//        for index in 1..<pathLocations.count {
+//            let distanceX = pathLocations[index].x - pathLocations[index - 1].x
+//            let distanceY = pathLocations[index].y - pathLocations[index - 1].y
+//            let slope = CGFloat(distanceX/distanceY)
+//            slopes.append(slope)
+//        }
+//        print(slopes)
+    }
+
+//
+//    func distance(point: CGPoint, linear: LinearEquation) -> CGFloat {
+//
+//    }
+//
+//    func makeLinearEquation(point1: CGPoint, point2: CGPoint) -> CGFloat {
+//
+//    }
+
+    func sideLimitPoints(points: [CGPoint]) -> SidePoints? {
+        let xSorted = points.sorted { $0.x < $1.x }
+        let ySorted = points.sorted { $0.y < $1.y }
+        guard let top = ySorted.first, let bottom = ySorted.last, let left = xSorted.first, let right = xSorted.last else { return nil }
+        return (top, bottom, left, right)
+    }
+
+    func createPloyonLayer(sidePoints: SidePoints) -> CALayer {
+        let (top, bottom, left, right) = sidePoints
+        let path = UIBezierPath()
+        path.move(to: CGPoint(x: top.x, y: top.y))
+        path.addLine(to: CGPoint(x: left.x, y: left.y))
+        path.addLine(to: CGPoint(x: bottom.x, y: bottom.y))
+        path.addLine(to: CGPoint(x: right.x, y: right.y))
+        path.addLine(to: CGPoint(x: top.x, y: top.y))
+
+        let shapeLayer = CAShapeLayer()
+        shapeLayer.path = path.cgPath
+        shapeLayer.strokeColor = UIColor.red.cgColor
+        shapeLayer.fillColor = UIColor.clear.cgColor
+        shapeLayer.lineWidth = 5
+
+        return shapeLayer
+    }
+
+
+    func createPlogonLayer(vertexs: [CGPoint]) -> CALayer {
+
+        let path = UIBezierPath()
+        path.addClip()
+        path.move(to: vertexs[0])
+        for index in 1..<vertexs.count {
+            path.addLine(to: vertexs[index])
+        }
+        path.addLine(to: vertexs[0])
+        path.close()
+
+        let shapeLayer = CAShapeLayer()
+        shapeLayer.path = path.cgPath
+        shapeLayer.strokeColor = UIColor.red.cgColor
+        shapeLayer.fillColor = UIColor.clear.cgColor
+        shapeLayer.lineWidth = 5
+        shapeLayer.lineJoin = CAShapeLayerLineJoin.round
+
+        return shapeLayer
+    }
+
+    func createCircleLayer(point: CGPoint) -> CALayer {
+        let circleLayer = CALayer()
+        circleLayer.frame = CGRect(x: point.x, y: point.y, width: 100, height: 100)
+        circleLayer.borderColor = UIColor.red.cgColor
+        circleLayer.borderWidth = 5
+        circleLayer.cornerRadius = 50
+        return circleLayer
+    }
+
+    func createRectangleLayer(point: CGPoint) -> CALayer {
+        let circleLayer = CALayer()
+        circleLayer.frame = CGRect(x: point.x, y: point.y, width: 100, height: 100)
+        circleLayer.borderColor = UIColor.red.cgColor
+        circleLayer.borderWidth = 5
+        return circleLayer
+    }
+
+    func createTriangleLayer(point: CGPoint) -> CALayer {
+        let path = UIBezierPath()
+        path.move(to: CGPoint(x: point.x, y: point.y + 100))
+        path.addLine(to: CGPoint(x: point.x + 50, y: point.y))
+        path.addLine(to: CGPoint(x: point.x + 100, y: point.y + 100))
+        path.addLine(to: CGPoint(x: point.x, y: point.y + 100))
+        path.addClip()
+
+        let shapeLayer = CAShapeLayer()
+        shapeLayer.path = path.cgPath
+        shapeLayer.strokeColor = UIColor.red.cgColor
+        shapeLayer.fillColor = UIColor.clear.cgColor
+        shapeLayer.lineWidth = 5
+
+        return shapeLayer
+    }
+
+    func getAngle(standardPoint: CGPoint, point1: CGPoint, point2: CGPoint) -> CGFloat {
+        let vec1 = CGVector(dx: point1.x - standardPoint.x, dy: point1.y - standardPoint.y)
+        let vec2 = CGVector(dx: point2.x - standardPoint.x, dy: point2.y - standardPoint.y)
+
+        let theta1 = atan2f(Float(vec1.dy), Float(vec1.dx))
+        let theta2 = atan2f(Float(vec2.dy), Float(vec2.dx))
+
+        var angle = abs(Double(theta1 - theta2) / .pi * 180)
+        return angle
+    }
+
+    func getVertexsPointList(points: [CGPoint]) -> [CGPoint]? {
+        let count = points.count
+        if count < 3 { return nil }
+        var vertexs: [CGPoint] = []
+        for i in 3..<points.count {
+
+            let standardPoint = points[i - 1]
+            let angle = getAngle(standardPoint: standardPoint, point1: points[i-2], point2: points[i])
+
+
+            print("angle", angle)
+            if abs(180 - angle) > 30  {
+                vertexs.append(standardPoint)
+            }
+
+        }
+        let angle = getAngle(standardPoint: points[0], point1: points[1], point2: points[count - 2])
+        if abs(180 - angle) > 30  {
+            vertexs.append(points[0])
+        }
+        print(vertexs)
+        return vertexs
+    }
+}
+
+// MARK: - Linear Equation x'x + y'y + a = 0
+struct LinearEquation {
+    let xCoefficient: CGFloat
+    let yCoefficient: CGFloat
+    let constant: CGFloat
+}
+
+
+
+extension PKStrokePoint {
+
+    func approximatelyIntersects(_ point: PKStrokePoint) -> Bool {
+        let origin = CGRect(origin: self.location, size: CGSize(width: 0.1, height: 0.1))
+        let target = CGRect(origin: point.location, size: CGSize(width: 0.1, height: 0.1))
+        return origin.intersects(target)
+    }
+}
+
+extension CGPoint {
+
+    func approximatelyIntersects(_ point: CGPoint) -> Bool {
+        let origin = CGRect(origin: self, size: CGSize(width: 0.1, height: 0.1))
+        let target = CGRect(origin: point, size: CGSize(width: 0.1, height: 0.1))
+        //print(origin, target, origin.contains(target))
+        return origin.contains(target)
+    }
+
+    func distance(point: CGPoint) -> CGFloat {
+        let abstractX = self.x - point.x
+        let abstractY = self.y - point.y
+
+        let distance = abs(sqrt(pow(abstractX,2) + pow(abstractY,2)))
+        return distance
+    }
+}
+
+extension CGPath {
+    func points() -> [CGPoint]
+    {
+        var bezierPoints = [CGPoint]()
+        forEach(body: { (element: CGPathElement) in
+            let numberOfPoints: Int = {
+                switch element.type {
+                case .moveToPoint, .addLineToPoint: // contains 1 point
+                    return 1
+                case .addQuadCurveToPoint: // contains 2 points
+                    return 2
+                case .addCurveToPoint: // contains 3 points
+                    return 3
+                case .closeSubpath:
+                    return 0
+                }
+            }()
+            for index in 0..<numberOfPoints {
+                let point = element.points[index]
+                bezierPoints.append(point)
+            }
+        })
+        return bezierPoints
+    }
+
+    func forEach(body: @escaping @convention(block) (CGPathElement) -> Void) {
+        typealias Body = @convention(block) (CGPathElement) -> Void
+
+        func callback(info: UnsafeMutableRawPointer?, element: UnsafePointer<CGPathElement>) {
+            let body = unsafeBitCast(info, to: Body.self)
+            body(element.pointee)
+        }
+
+        let unsafeBody = unsafeBitCast(body, to: UnsafeMutableRawPointer.self)
+        apply(info: unsafeBody, function: callback)
     }
 }
