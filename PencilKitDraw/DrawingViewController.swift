@@ -473,11 +473,12 @@ class Circle: Shape {
     }
 
     override func makeLayer() -> CALayer {
-        let circleLayer = CALayer()
-        circleLayer.frame = layerFrame
-        circleLayer.borderColor = UIColor.red.cgColor
-        circleLayer.borderWidth = 5
-        circleLayer.cornerRadius = layerFrame.width / 2
+        let path = UIBezierPath(ovalIn: layerFrame)
+        let circleLayer = CAShapeLayer()
+        circleLayer.path = path.cgPath
+        circleLayer.fillColor = UIColor.clear.cgColor
+        circleLayer.strokeColor = UIColor.red.cgColor
+        circleLayer.lineWidth = 5
         return circleLayer
     }
 }
