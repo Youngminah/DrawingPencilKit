@@ -239,7 +239,7 @@ class CanvasView: PKCanvasView {
 
     private var stoppingPointCount: Int = 0
 
-    let shape: ShapeCase = .circle
+    let shape: ShapeCase = .rectangle
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -443,6 +443,13 @@ class Shape {
         return points[0]
     }
 
+    var layerFrame : CGRect {
+        let count = points.count
+        let xSorted = points.sorted { $0.x < $1.x }
+        let ySorted = points.sorted { $0.y < $1.y }
+        return CGRect(x: xSorted[0].x, y: ySorted[0].y, width: xSorted[count - 1].x - xSorted[0].x, height: ySorted[count - 1].y - ySorted[0].y)
+    }
+
     init(points: [CGPoint], vertexs: [CGPoint] = []) {
         self.points = points
         self.vertexs = vertexs
@@ -460,13 +467,6 @@ class Shape {
 
 
 class Circle: Shape {
-
-    private var layerFrame : CGRect {
-        let count = points.count
-        let xSorted = points.sorted { $0.x < $1.x }
-        let ySorted = points.sorted { $0.y < $1.y }
-        return CGRect(x: xSorted[0].x, y: ySorted[0].y, width: xSorted[count - 1].x - xSorted[0].x, height: ySorted[count - 1].y - ySorted[0].y)
-    }
 
     init(points: [CGPoint]) {
         super.init(points: points)
@@ -534,24 +534,12 @@ class Rectangle: Shape {
     }
 
     override func makeLayer() -> CALayer {
-
-        let path = UIBezierPath()
-        path.addClip()
-        path.move(to: vertexs[0])
-        for index in 1..<vertexs.count {
-            path.addLine(to: vertexs[index])
-        }
-        path.addLine(to: vertexs[0])
-        path.close()
-
-        let shapeLayer = CAShapeLayer()
-        shapeLayer.path = path.cgPath
-        shapeLayer.strokeColor = UIColor.red.cgColor
-        shapeLayer.fillColor = UIColor.clear.cgColor
-        shapeLayer.lineWidth = 5
-        shapeLayer.lineJoin = CAShapeLayerLineJoin.round
-
-        return shapeLayer
+        let circleLayer = CAShapeLayer()
+        circleLayer.frame = layerFrame
+        circleLayer.borderColor = UIColor.red.cgColor
+        circleLayer.borderWidth = 5
+        circleLayer.lineJoin = CAShapeLayerLineJoin.round
+        return circleLayer
     }
 }
 
