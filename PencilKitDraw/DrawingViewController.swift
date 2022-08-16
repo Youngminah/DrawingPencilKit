@@ -224,14 +224,22 @@ extension DrawingViewController: CALayerDelegate {
 
 class CanvasView: PKCanvasView {
 
+    enum ShapeCase {
+        case circle
+        case rectangle
+        case triangle
+        case ploygon
+    }
+
     typealias SidePoints = (top: CGPoint, bottom: CGPoint, `left`: CGPoint, `right`: CGPoint)
     private var pointList: [CGPoint] = []
     private var isSnapToShape: Bool = false
-    private var minimumTouchSize = 50
-    private var minimumDistance: CGFloat = 2
+    private var minimumStoppingPointCount = 50
+    private var minimumDistanceBetweenPoints: CGFloat = 2
 
+    private var stoppingPointCount: Int = 0
 
-    private var pauseTouchCount: Int = 0
+    let shape: ShapeCase = .circle
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -241,19 +249,14 @@ class CanvasView: PKCanvasView {
         super.init(coder: coder)
     }
 
-
-
     override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
         super.touchesMoved(touches, with: event)
+        guard let touch = touches.first else {return }
 
         if isSnapToShape { return }
-
-        guard let touch = touches.first else {return }
         if touch.type != .pencil { return }
 
-
         let count = pointList.count
-
         if count == 0 {
             pointList.append(touch.location(in: self))
             return
@@ -261,119 +264,57 @@ class CanvasView: PKCanvasView {
 
         let lastPoint = pointList[count - 1]
         let currentPoint = touch.location(in: self)
-
         let distance = lastPoint.distance(point: currentPoint)
-        //print(distance)
 
-        if distance < minimumDistance {
-            pauseTouchCount += 1
+        if distance < minimumDistanceBetweenPoints { // If touches didn't move.
 
-            if pauseTouchCount > 50 {
-//                guard let sidePoints = sideLimitPoints(points: pointList) else { return }
-//                print(sidePoints)
-//                let layer = createPloyonLayer(sidePoints: sidePoints)
-//                self.layer.addSublayer(layer)
-                //print(intersectTouches.count)
+            stoppingPointCount += 1
+            print(stoppingPointCount)
+            if stoppingPointCount > minimumStoppingPointCount { // If the gesture is recognized as a long press.
 
-                guard let vertexs = getVertexsPointList(points: pointList) else { return }
+                guard let vertexs = getVertexsInPointList(points: pointList) else { return }
 
-                let layer = createPlogonLayer(vertexs: vertexs)
-                self.layer.addSublayer(layer)
+                switch shape {
+                case .circle:
+                    let circle = Circle(points: pointList)
+                    let layer = circle.makeLayer()
+                    self.layer.addSublayer(layer)
+
+                case .rectangle:
+                    let rectangle = Rectangle(points: pointList)
+                    let layer = rectangle.makeLayer()
+                    self.layer.addSublayer(layer)
+
+                case .triangle:
+                    let triangle = Triangle(points: pointList)
+                    let layer = triangle.makeLayer()
+                    self.layer.addSublayer(layer)
+
+                case .ploygon:
+                    let ploygon = Ploygon(points: pointList, vertexs: vertexs)
+                    let layer = ploygon.makeLayer()
+                    self.layer.addSublayer(layer)
+                }
+
                 isSnapToShape = true
+                stoppingPointCount = 0
                 pointList.removeAll()
             }
             return
         }
-
+        stoppingPointCount = 0
         pointList.append(currentPoint)
-        pauseTouchCount = 0
-
-
-        //print(touch.location(in: self))
-
-//        if count < minimumTouchSize { return }
-//
-//        let lastLocation = pointList[count - 1]
-//        let initialLocation = pointList[count - minimumTouchSize]
-//
-//        let distance = lastLocation.distance(point: initialLocation)
-//
-//        //print(lastLocation, initialLocation, distance)
-//        let currentPoint = touch.location(in: self)
-//
-//        if distance < minimumDistance {
-//            guard let sidePoints = sideLimitPoints(points: pointList) else { return }
-//            print(sidePoints)
-//            let layer = createPloyonLayer(sidePoints: sidePoints)
-//            self.layer.addSublayer(layer)
-//            //print(intersectTouches.count)
-//            isSnapToShape = true
-//            pointList.removeAll()
-//        }
-
-
-//        // Append First UITouch Info
-//        if touchList.count == 0 {
-//            touchList.append(touch)
-//            return
-//        }
-//
-//        // Check Approximately Intersect. If so, append.
-//        let currentPoint = touch.location(in: self)
-//
-//        //print(touch.previousLocation(in: self))
-//        touchList.forEach {
-//            if !$0.location(in: self).approximatelyIntersects(currentPoint) {
-//                touchList.removeAll()
-//                return
-//            }
-//        }
-//        touchList.append(touch)
-//
-//        // Check Long Press and Draw Shape
-//        if touchList.count > 300 {
-//            let layer = createTriangleLayer(point: currentPoint)
-//            self.layer.addSublayer(layer)
-//            //print(intersectTouches.count)
-//            isSnapToShape = true
-//            touchList.removeAll()
-//        }
-
     }
 
     override func touchesEstimatedPropertiesUpdated(_ touches: Set<UITouch>) {
         super.touchesEstimatedPropertiesUpdated(touches)
-        //print("touchesEstimatedPropertiesUpdated")
     }
     override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
         super.touchesEnded(touches, with: event)
         pointList.removeAll()
         isSnapToShape = false
-        pauseTouchCount = 0
-//
-//        var pathLocations: [CGPoint] = []
-//        var slopes: [CGFloat] = []
-//        for path in lastStrokePath.interpolatedPoints(by: .distance(1)) {
-//            pathLocations.append(path.location)
-//        }
-//
-//        for index in 1..<pathLocations.count {
-//            let distanceX = pathLocations[index].x - pathLocations[index - 1].x
-//            let distanceY = pathLocations[index].y - pathLocations[index - 1].y
-//            let slope = CGFloat(distanceX/distanceY)
-//            slopes.append(slope)
-//        }
-//        print(slopes)
+        stoppingPointCount = 0
     }
-
-//
-//    func distance(point: CGPoint, linear: LinearEquation) -> CGFloat {
-//
-//    }
-//
-//    func makeLinearEquation(point1: CGPoint, point2: CGPoint) -> CGFloat {
-//
-//    }
 
     func sideLimitPoints(points: [CGPoint]) -> SidePoints? {
         let xSorted = points.sorted { $0.x < $1.x }
@@ -463,11 +404,11 @@ class CanvasView: PKCanvasView {
         let theta1 = atan2f(Float(vec1.dy), Float(vec1.dx))
         let theta2 = atan2f(Float(vec2.dy), Float(vec2.dx))
 
-        var angle = abs(Double(theta1 - theta2) / .pi * 180)
+        let angle = abs(Double(theta1 - theta2) / .pi * 180)
         return angle
     }
 
-    func getVertexsPointList(points: [CGPoint]) -> [CGPoint]? {
+    func getVertexsInPointList(points: [CGPoint]) -> [CGPoint]? {
         let count = points.count
         if count < 3 { return nil }
         var vertexs: [CGPoint] = []
@@ -489,6 +430,127 @@ class CanvasView: PKCanvasView {
         }
         print(vertexs)
         return vertexs
+    }
+}
+
+
+class Shape {
+
+    let points: [CGPoint]
+    var vertexs: [CGPoint]
+
+    var startPoints: CGPoint {
+        return points[0]
+    }
+
+    init(points: [CGPoint], vertexs: [CGPoint] = []) {
+        self.points = points
+        self.vertexs = vertexs
+    }
+
+    func makeLayer() -> CALayer {
+        let circleLayer = CALayer()
+        circleLayer.frame = CGRect(x: self.startPoints.x, y: self.startPoints.y, width: 100, height: 100)
+        circleLayer.borderColor = UIColor.red.cgColor
+        circleLayer.borderWidth = 5
+        circleLayer.cornerRadius = 50
+        return circleLayer
+    }
+}
+
+
+class Circle: Shape {
+
+    private var layerFrame : CGRect {
+        let count = points.count
+        let xSorted = points.sorted { $0.x < $1.x }
+        let ySorted = points.sorted { $0.y < $1.y }
+        return CGRect(x: xSorted[0].x, y: ySorted[0].y, width: xSorted[count - 1].x - xSorted[0].x, height: ySorted[count - 1].y - ySorted[0].y)
+    }
+
+    init(points: [CGPoint]) {
+        super.init(points: points)
+    }
+
+    override func makeLayer() -> CALayer {
+        let circleLayer = CALayer()
+        circleLayer.frame = layerFrame
+        circleLayer.borderColor = UIColor.red.cgColor
+        circleLayer.borderWidth = 5
+        circleLayer.cornerRadius = layerFrame.width / 2
+        return circleLayer
+    }
+}
+
+class Triangle: Shape {
+
+    init(points: [CGPoint]) {
+        super.init(points: points)
+    }
+
+    override func makeLayer() -> CALayer {
+        let circleLayer = CALayer()
+        circleLayer.frame = CGRect(x: self.startPoints.x, y: self.startPoints.y, width: 100, height: 100)
+        circleLayer.borderColor = UIColor.red.cgColor
+        circleLayer.borderWidth = 5
+        circleLayer.cornerRadius = 50
+        return circleLayer
+    }
+}
+
+class Ploygon: Shape {
+
+    override init(points: [CGPoint], vertexs: [CGPoint]) {
+        super.init(points: points, vertexs: vertexs)
+    }
+
+    override func makeLayer() -> CALayer {
+
+        let path = UIBezierPath()
+        path.addClip()
+        path.move(to: vertexs[0])
+        for index in 1..<vertexs.count {
+            path.addLine(to: vertexs[index])
+        }
+        path.addLine(to: vertexs[0])
+        path.close()
+
+        let shapeLayer = CAShapeLayer()
+        shapeLayer.path = path.cgPath
+        shapeLayer.strokeColor = UIColor.red.cgColor
+        shapeLayer.fillColor = UIColor.clear.cgColor
+        shapeLayer.lineWidth = 5
+        shapeLayer.lineJoin = CAShapeLayerLineJoin.round
+
+        return shapeLayer
+    }
+}
+
+class Rectangle: Shape {
+
+    init(points: [CGPoint]) {
+        super.init(points: points)
+    }
+
+    override func makeLayer() -> CALayer {
+
+        let path = UIBezierPath()
+        path.addClip()
+        path.move(to: vertexs[0])
+        for index in 1..<vertexs.count {
+            path.addLine(to: vertexs[index])
+        }
+        path.addLine(to: vertexs[0])
+        path.close()
+
+        let shapeLayer = CAShapeLayer()
+        shapeLayer.path = path.cgPath
+        shapeLayer.strokeColor = UIColor.red.cgColor
+        shapeLayer.fillColor = UIColor.clear.cgColor
+        shapeLayer.lineWidth = 5
+        shapeLayer.lineJoin = CAShapeLayerLineJoin.round
+
+        return shapeLayer
     }
 }
 
