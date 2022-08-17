@@ -235,11 +235,11 @@ class CanvasView: PKCanvasView {
     private var pointList: [CGPoint] = []
     private var isSnapToShape: Bool = false
     private var minimumStoppingPointCount = 50
-    private var minimumDistanceBetweenPoints: CGFloat = 2
+    private var minimumDistanceBetweenPoints: CGFloat = 4
 
     private var stoppingPointCount: Int = 0
 
-    let shape: ShapeCase = .rectangle
+    let shape: ShapeCase = .ploygon
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -269,7 +269,7 @@ class CanvasView: PKCanvasView {
         if distance < minimumDistanceBetweenPoints { // If touches didn't move.
 
             stoppingPointCount += 1
-            print(stoppingPointCount)
+
             if stoppingPointCount > minimumStoppingPointCount { // If the gesture is recognized as a long press.
 
                 guard let vertexs = getVertexsInPointList(points: pointList) else { return }
@@ -397,9 +397,9 @@ class CanvasView: PKCanvasView {
         return shapeLayer
     }
 
-    func getAngle(standardPoint: CGPoint, point1: CGPoint, point2: CGPoint) -> CGFloat {
-        let vec1 = CGVector(dx: point1.x - standardPoint.x, dy: point1.y - standardPoint.y)
-        let vec2 = CGVector(dx: point2.x - standardPoint.x, dy: point2.y - standardPoint.y)
+    func getAngle(centerPoint: CGPoint, point1: CGPoint, point2: CGPoint) -> CGFloat {
+        let vec1 = CGVector(dx: point1.x - centerPoint.x, dy: point1.y - centerPoint.y)
+        let vec2 = CGVector(dx: point2.x - centerPoint.x, dy: point2.y - centerPoint.y)
 
         let theta1 = atan2f(Float(vec1.dy), Float(vec1.dx))
         let theta2 = atan2f(Float(vec2.dy), Float(vec2.dx))
@@ -410,22 +410,21 @@ class CanvasView: PKCanvasView {
 
     func getVertexsInPointList(points: [CGPoint]) -> [CGPoint]? {
         let count = points.count
-        if count < 3 { return nil }
+        if count < 4 { return nil }
         var vertexs: [CGPoint] = []
+
         for i in 3..<points.count {
 
-            let standardPoint = points[i - 1]
-            let angle = getAngle(standardPoint: standardPoint, point1: points[i-2], point2: points[i])
+            let centerPoint = points[i - 1]
+            let angle = getAngle(centerPoint: centerPoint, point1: points[i-2], point2: points[i])
 
-
-            print("angle", angle)
-            if abs(180 - angle) > 30  {
-                vertexs.append(standardPoint)
+            if abs(180 - angle) > 30 && ( vertexs.count == 0 || vertexs[vertexs.count - 1].distance(point: centerPoint) > 8) {
+                vertexs.append(centerPoint)
             }
-
         }
-        let angle = getAngle(standardPoint: points[0], point1: points[1], point2: points[count - 2])
-        if abs(180 - angle) > 30  {
+
+        let angle = getAngle(centerPoint: points[0], point1: points[1], point2: points[count - 3])
+        if abs(180 - angle) > 30  && ( vertexs.count == 0 || vertexs[vertexs.count - 1].distance(point: points[0]) > 8) {
             vertexs.append(points[0])
         }
         print(vertexs)
@@ -538,7 +537,7 @@ class Rectangle: Shape {
         circleLayer.frame = layerFrame
         circleLayer.borderColor = UIColor.red.cgColor
         circleLayer.borderWidth = 5
-        circleLayer.lineJoin = CAShapeLayerLineJoin.round
+        circleLayer.cornerRadius = 2
         return circleLayer
     }
 }
